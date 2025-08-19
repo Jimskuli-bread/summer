@@ -2,48 +2,62 @@ using UnityEngine;
 
 public class CollectibleSpawner : MonoBehaviour
 {
-    public GameObject collectiblePrefab; // The collectible prefab to spawn
-    public int collectibleCount = 100;   // Number of collectibles to spawn
-    public Vector3 spawnAreaSize = new Vector3(10, 0, 10); // Size of the spawn area
-    public float spawnHeight = 10f;     // Height from which to raycast down
-    public LayerMask groundLayer;       // Layer mask for the ground
-    private int i = 0;
+    public GameObject collectiblePrefab;
+    public int collectibleCount = 100;
+    public Vector3 spawnAreaSize = new Vector3(100, 0, 100);
+    public float spawnHeight = 150f;  // Should be above highest point of terrain
+    public LayerMask groundLayer;     // Assign the ground layer in Inspector
 
     void Start()
-{
-    int i = 0;
-    SpawnCollectibles();
-}
-
-void SpawnCollectibles()
-{
-    int spawnedCount = 0;
-
-    while ( i < collectibleCount )
     {
-        Vector3 randomPosition = GetRandomPosition();
-        if (Physics.Raycast(randomPosition, Vector3.down, out RaycastHit hit, Mathf.Infinity, groundLayer))
+        SpawnCollectibles();
+    }
+
+    void SpawnCollectibles()
+    {
+        int spawnedCount = 0;
+        int attempts = 0;
+        int maxAttempts = collectibleCount * 100;
+
+        while (spawnedCount < collectibleCount && attempts < maxAttempts)
         {
-            // Spawn the collectible at the hit point
-            Instantiate(collectiblePrefab, hit.point, Quaternion.identity);
-            spawnedCount++;
+            attempts++;
+            Vector3 rayOrigin = GetRandomPosition();
+
+            if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, Mathf.Infinity, groundLayer))
+            {
+                Vector3 spawnPoint = hit.point; // exactly on ground surface
+                Instantiate(collectiblePrefab, spawnPoint, Quaternion.identity);
+                spawnedCount++;
+            }
+
+            if (attempts % 1000 == 0)
+            {
+                Debug.Log($"Spawn progress: {spawnedCount}/{collectibleCount} after {attempts} attempts.");
+            }
+        }
+
+        if (spawnedCount < collectibleCount)
+        {
+            Debug.LogError($"Failed to spawn all collectibles. Spawned {spawnedCount}/{collectibleCount} after {attempts} attempts.");
         }
         else
         {
-            Debug.LogWarning($"Raycast failed for position {randomPosition}. Check ground layer or spawn area.");
+            Debug.Log($"Successfully spawned all {collectibleCount} collectibles.");
         }
-        i++;
     }
 
-    Debug.Log($"Spawned {spawnedCount}/{collectibleCount} collectibles.");
-}
+    Vector3 GetRandomPosition()
+    {
+        float x = Random.Range(-spawnAreaSize.x / 2f, spawnAreaSize.x / 2f);
+        float z = Random.Range(-spawnAreaSize.z / 2f, spawnAreaSize.z / 2f);
+        return new Vector3(x, spawnHeight, z) + transform.position;
+    }
 
-Vector3 GetRandomPosition()
-{
-    // Generate a random position within the spawn area
-    float x = Random.Range(-spawnAreaSize.x / 2, spawnAreaSize.x / 2);
-    float z = Random.Range(-spawnAreaSize.z / 2, spawnAreaSize.z / 2);
-    float y = spawnHeight; // Start the raycast from above
-    return new Vector3(x, y, z) + transform.position;
-}
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.yellow;
+        Vector3 center = transform.position + Vector3.up * 0.1f;
+        Gizmos.DrawWireCube(center, new Vector3(spawnAreaSize.x, 0.2f, spawnAreaSize.z));
+    }
 }
