@@ -5,6 +5,9 @@ TagManager:
   serializedVersion: 3
   tags:
   - Collectible
+  - City
+  - Building
+  - Enemy
   layers:
   - Default
   - TransparentFX

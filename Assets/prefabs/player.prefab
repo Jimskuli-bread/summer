@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 6767478894973268692}
   - component: {fileID: 1345827665848516010}
   - component: {fileID: 2736747193407091819}
+  - component: {fileID: 6014780070512366023}
   m_Layer: 0
   m_Name: player
   m_TagString: Untagged
@@ -124,10 +125,46 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3e8952e2526130b4c9245cb57cceeb40, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 5
-  jumpHeight: 2
-  gravity: -9.81
+  walkSpeed: 6
+  runSpeed: 14
+  jumpForce: 8
+  airControl: 0.7
+  maxJumps: 2
+  wallJumpForce: 14
+  wallRunUpwardSpeed: 7
+  wallRunDuration: 2.2
+  wallDetectionDistance: 0.8
+  wallRunGravity: 1.2
+  vaultHeight: 1.6
+  vaultDistance: 1.5
   cameraTransform: {fileID: 8335943600123509371}
+--- !u!54 &6014780070512366023
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7191822772176061085}
+  serializedVersion: 4
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 80
+  m_CollisionDetection: 0
 --- !u!1 &8610863757208304607
 GameObject:
   m_ObjectHideFlags: 0

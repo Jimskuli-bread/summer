@@ -1,64 +1,256 @@
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody))]
 public class PlayerMovement : MonoBehaviour
 {
-    public float moveSpeed = 5f; // Speed of the player
-    public float jumpHeight = 2f; // Height of the jump
-    public float gravity = -9.81f; // Gravity force
+    [Header("Movement Settings")]
+    public float walkSpeed = 6f;
+    public float runSpeed = 14f;
+    public float jumpForce = 8f;
+    public float airControl = 0.7f;
+    public int maxJumps = 2;
 
-    private CharacterController controller; // Reference to the CharacterController component
-    private Vector3 moveDirection; // Stores the player's movement direction
-    private Vector3 velocity; // Tracks vertical velocity (for jumping and gravity)
-    private bool isGrounded; // Tracks if the player is on the ground
+    [Header("Parkour Settings")]
+    public float wallJumpForce = 14f;
+    public float wallRunUpwardSpeed = 7f;
+    public float wallRunDuration = 2.2f;
+    public float wallDetectionDistance = 0.8f;
+    public float wallRunGravity = 1.2f;
+    public float vaultHeight = 1.6f;
+    public float vaultDistance = 1.5f;
 
-    public Transform cameraTransform; // Reference to the camera's transform
+    [Header("References")]
+    public Transform cameraTransform;
+
+    // Add at the top for sphere settings
+    public float jumpResetSphereRadius = 0.3f;
+
+    private Rigidbody rb;
+    private bool isGrounded;
+    private bool isTouchingWall;
+    private bool isWallRunning;
+    private bool isVaulting;
+    private float wallRunTimer;
+    private Vector3 wallNormal;
+    private int jumpCount = 0;
+    private Vector3 vaultStart;
+    private Vector3 vaultEnd;
+    private float vaultTimer;
+
+    // Track previous states for proper jump reset
+    private bool wasGrounded = false;
+    private bool wasOnCeiling = false;
+    private bool wasWallRunning = false;
 
     void Start()
     {
-        // Get the CharacterController component attached to the player
-        controller = GetComponent<CharacterController>();
+        rb = GetComponent<Rigidbody>();
+        // In the Rigidbody component (Inspector), freeze rotation X and Z (but NOT Y) for a capsule!
     }
 
     void Update()
     {
-        // Check if the player is grounded
-        isGrounded = controller.isGrounded;
+        // --- GROUND & ROOF CHECKS USING GIZMO SPHERE ---
+        Vector3 sphereOrigin = transform.position + Vector3.down * 0.5f;
+        float sphereRadius = jumpResetSphereRadius;
 
-        if (isGrounded && velocity.y < 0)
+        // Raycast down to find the ground or roof below the player
+        RaycastHit hit;
+        if (Physics.Raycast(sphereOrigin, Vector3.down, out hit, 20f))
         {
-            velocity.y = -2f; // Reset vertical velocity when grounded
+            // Use the hit point for the gizmo and jump reset check
+            Vector3 gizmoPos = hit.point;
+
+            // Check if the player's collider overlaps the gizmo sphere
+            Collider playerCollider = GetComponent<Collider>();
+            if (playerCollider != null)
+            {
+                Collider[] overlaps = Physics.OverlapSphere(gizmoPos, sphereRadius);
+                foreach (var col in overlaps)
+                {
+                    if (col == playerCollider)
+                    {
+                        // Reset jumps only while the player is touching the gizmo sphere
+                        jumpCount = 0;
+                        break;
+                    }
+                }
+            }
         }
 
-        // Get input from the player (WASD or arrow keys)
-        float horizontal = Input.GetAxis("Horizontal");
-        float vertical = Input.GetAxis("Vertical");
+        // --- CEILING CHECK ---
+        float ceilingCheckDistance = 1.5f;
+        bool isOnCeiling = Physics.Raycast(transform.position, Vector3.up, ceilingCheckDistance);
 
-        // Get the forward and right directions relative to the camera
-        Vector3 forward = cameraTransform.forward;
-        Vector3 right = cameraTransform.right;
+        // --- INPUT ---
+        float horizontal = Input.GetAxisRaw("Horizontal");
+        float vertical = Input.GetAxisRaw("Vertical");
+        Vector3 camForward = cameraTransform.forward;
+        camForward.y = 0f;
+        camForward.Normalize();
+        Vector3 camRight = cameraTransform.right;
+        camRight.y = 0f;
+        camRight.Normalize();
+        Vector3 moveInput = (camForward * vertical + camRight * horizontal).normalized;
 
-        // Flatten the directions to ignore vertical movement
-        forward.y = 0f;
-        right.y = 0f;
-        forward.Normalize();
-        right.Normalize();
+        // --- MOVEMENT ---
+        float speed = Input.GetKey(KeyCode.LeftShift) ? runSpeed : walkSpeed;
+        Vector3 targetVel = moveInput * speed;
+        Vector3 velocityChange = targetVel - new Vector3(rb.velocity.x, 0, rb.velocity.z);
+        velocityChange = Vector3.ClampMagnitude(velocityChange, isGrounded ? 20f : 10f);
+        rb.AddForce(velocityChange * (isGrounded ? 1f : airControl), ForceMode.Acceleration);
 
-        // Calculate the movement direction relative to the camera
-        moveDirection = (forward * vertical + right * horizontal).normalized;
+        // --- VAULTING ---
+        if (isVaulting)
+            return;
 
-        // Move the player
-        controller.Move(moveDirection * moveSpeed * Time.deltaTime);
-
-        // Jumping
-        if (Input.GetButtonDown("Jump") && isGrounded)
+        // --- WALL DETECTION ---
+        isTouchingWall = false;
+        wallNormal = Vector3.zero;
+        RaycastHit wallHit; // <-- Rename this variable!
+        if (Physics.Raycast(transform.position, transform.right, out wallHit, wallDetectionDistance))
         {
-            velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity); // Calculate jump velocity
+            if (wallHit.collider.CompareTag("Building"))
+            {
+                isTouchingWall = true;
+                wallNormal = wallHit.normal;
+            }
+        }
+        else if (Physics.Raycast(transform.position, -transform.right, out wallHit, wallDetectionDistance))
+        {
+            if (wallHit.collider.CompareTag("Building"))
+            {
+                isTouchingWall = true;
+                wallNormal = wallHit.normal;
+            }
         }
 
-        // Apply gravity
-        velocity.y += gravity * Time.deltaTime;
+        // --- WALLRUN START/STOP ---
+        if (isTouchingWall && !isGrounded && moveInput.magnitude > 0.1f && Input.GetKey(KeyCode.LeftShift))
+        {
+            if (!isWallRunning)
+            {
+                isWallRunning = true;
+                wallRunTimer = wallRunDuration;
+                jumpCount = 0; // Reset jumps on wallrun start
+            }
+        }
+        else
+        {
+            isWallRunning = false;
+        }
 
-        // Apply vertical velocity to the player
-        controller.Move(velocity * Time.deltaTime);
+        // --- WALLRUNNING ---
+        if (isWallRunning)
+        {
+            wallRunTimer -= Time.deltaTime;
+            if (wallRunTimer <= 0f)
+            {
+                isWallRunning = false;
+            }
+            else
+            {
+                Vector3 alongWall = Vector3.Cross(wallNormal, Vector3.up);
+                if (Vector3.Dot(alongWall, moveInput) < 0)
+                    alongWall = -alongWall;
+                Vector3 wallRunDir = alongWall.normalized * speed * 1.1f;
+                Vector3 desiredVelocity = wallRunDir + Vector3.up * wallRunUpwardSpeed;
+                rb.velocity = Vector3.Lerp(rb.velocity, desiredVelocity, Time.deltaTime * 8f);
+                rb.velocity += Vector3.down * wallRunGravity * Time.deltaTime;
+                jumpCount = 0; // Reset jumps while wallrunning
+                wasWallRunning = true;
+                return;
+            }
+        }
+
+        // --- VAULTING DETECTION ---
+        if (Input.GetKeyDown(KeyCode.Space) && isGrounded && !isVaulting)
+        {
+            if (Physics.Raycast(transform.position + Vector3.up * 0.5f, camForward, out hit, vaultDistance))
+            {
+                if (hit.collider.CompareTag("Building") && hit.point.y - transform.position.y < vaultHeight)
+                {
+                    StartCoroutine(VaultRoutine(hit.point + Vector3.up * 1.3f + camForward * 1.1f));
+                    rb.velocity = Vector3.zero;
+                    return;
+                }
+            }
+        }
+
+        // --- JUMPING ---
+        if (Input.GetButtonDown("Jump"))
+        {
+            if (isGrounded || isWallRunning || isOnCeiling)
+            {
+                Vector3 v = rb.velocity;
+                v.y = 0;
+                rb.velocity = v;
+                if (isWallRunning)
+                    rb.velocity = wallNormal * wallJumpForce + Vector3.up * jumpForce;
+                else
+                    rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+                jumpCount = 1; // First jump used
+            }
+            else if (jumpCount < maxJumps)
+            {
+                Vector3 v = rb.velocity;
+                v.y = 0;
+                rb.velocity = v;
+                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+                jumpCount++; // Second jump used
+            }
+        }
+
+        // --- STORE PREVIOUS STATES ---
+        wasGrounded = isGrounded;
+        wasOnCeiling = isOnCeiling;
+        wasWallRunning = isWallRunning;
+    }
+
+    // --- VAULTING COROUTINE ---
+    System.Collections.IEnumerator VaultRoutine(Vector3 end)
+    {
+        isVaulting = true;
+        vaultStart = transform.position;
+        vaultEnd = end;
+        vaultTimer = 0f;
+        float duration = 0.4f;
+        while (vaultTimer < 1f)
+        {
+            vaultTimer += Time.deltaTime / duration;
+            Vector3 vaultPos = Vector3.Lerp(vaultStart, vaultEnd, Mathf.SmoothStep(0, 1, vaultTimer));
+            rb.MovePosition(vaultPos);
+            yield return null;
+        }
+        isVaulting = false;
+    }
+
+    void OnDrawGizmos()
+    {
+        Vector3 sphereOrigin = transform.position + Vector3.down * 0.5f;
+        float sphereRadius = jumpResetSphereRadius;
+
+        // Raycast down to find what is below the player (roof, ground, etc.)
+        RaycastHit hit;
+        if (Physics.Raycast(sphereOrigin, Vector3.down, out hit, 20f))
+        {
+            // If the hit collider is tagged "Building", treat it as a roof (City layer)
+            if (hit.collider.CompareTag("Building"))
+            {
+                Gizmos.color = Color.red;
+#if UNITY_EDITOR
+                UnityEditor.Handles.Label(hit.point + Vector3.right * 0.2f, "<City>");
+#endif
+            }
+            else
+            {
+                Gizmos.color = Color.green;
+#if UNITY_EDITOR
+                UnityEditor.Handles.Label(hit.point + Vector3.right * 0.2f, "<Default>");
+#endif
+            }
+
+            Gizmos.DrawSphere(hit.point, sphereRadius);
+        }
     }
 }

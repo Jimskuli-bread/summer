@@ -1,0 +1,13 @@
+fileFormatVersion: 2
+guid: d79bb4a3b18b06f47b3757fbcc5429bd
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - collectiblePrefab: {fileID: 3922677238666265979, guid: d38155e989be8054baf0d4a4461dc7e9, type: 3}
+  - winAudioSource: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
