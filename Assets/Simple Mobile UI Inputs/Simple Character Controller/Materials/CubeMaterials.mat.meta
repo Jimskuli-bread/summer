@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: f04dc90ef95b902479117ec0cc6f27da
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204464
+  packageName: Simple Mobile UI Inputs
+  packageVersion: 1.1
+  assetPath: Assets/Simple Mobile UI Inputs/Simple Character Controller/Materials/CubeMaterials.mat
+  uploadId: 459444

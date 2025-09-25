@@ -46,6 +46,8 @@ public class PlayerMovement : MonoBehaviour
     {
         rb = GetComponent<Rigidbody>();
         // In the Rigidbody component (Inspector), freeze rotation X and Z (but NOT Y) for a capsule!
+        // Cursor.lockState = CursorLockMode.Locked; // Removed for mobile
+        // Cursor.visible = true; // Ensure cursor is visible
     }
 
     void Update()
@@ -54,14 +56,10 @@ public class PlayerMovement : MonoBehaviour
         Vector3 sphereOrigin = transform.position + Vector3.down * 0.5f;
         float sphereRadius = jumpResetSphereRadius;
 
-        // Raycast down to find the ground or roof below the player
         RaycastHit hit;
         if (Physics.Raycast(sphereOrigin, Vector3.down, out hit, 20f))
         {
-            // Use the hit point for the gizmo and jump reset check
             Vector3 gizmoPos = hit.point;
-
-            // Check if the player's collider overlaps the gizmo sphere
             Collider playerCollider = GetComponent<Collider>();
             if (playerCollider != null)
             {
@@ -82,9 +80,11 @@ public class PlayerMovement : MonoBehaviour
         float ceilingCheckDistance = 1.5f;
         bool isOnCeiling = Physics.Raycast(transform.position, Vector3.up, ceilingCheckDistance);
 
-        // --- INPUT ---
-        float horizontal = Input.GetAxisRaw("Horizontal");
-        float vertical = Input.GetAxisRaw("Vertical");
+        // --- ANDROID INPUT ---
+        // Replace keyboard/mouse with joystick and button flags
+        Vector2 joyInput = joystick != null ? joystick.Direction : Vector2.zero;
+        float horizontal = joyInput.x;
+        float vertical = joyInput.y;
         Vector3 camForward = cameraTransform.forward;
         camForward.y = 0f;
         camForward.Normalize();
@@ -94,7 +94,7 @@ public class PlayerMovement : MonoBehaviour
         Vector3 moveInput = (camForward * vertical + camRight * horizontal).normalized;
 
         // --- MOVEMENT ---
-        float speed = Input.GetKey(KeyCode.LeftShift) ? runSpeed : walkSpeed;
+        float speed = runPressed ? runSpeed : walkSpeed;
         Vector3 targetVel = moveInput * speed;
         Vector3 velocityChange = targetVel - new Vector3(rb.velocity.x, 0, rb.velocity.z);
         velocityChange = Vector3.ClampMagnitude(velocityChange, isGrounded ? 20f : 10f);
@@ -107,7 +107,7 @@ public class PlayerMovement : MonoBehaviour
         // --- WALL DETECTION ---
         isTouchingWall = false;
         wallNormal = Vector3.zero;
-        RaycastHit wallHit; // <-- Rename this variable!
+        RaycastHit wallHit;
         if (Physics.Raycast(transform.position, transform.right, out wallHit, wallDetectionDistance))
         {
             if (wallHit.collider.CompareTag("Building"))
@@ -126,7 +126,7 @@ public class PlayerMovement : MonoBehaviour
         }
 
         // --- WALLRUN START/STOP ---
-        if (isTouchingWall && !isGrounded && moveInput.magnitude > 0.1f && Input.GetKey(KeyCode.LeftShift))
+        if (isTouchingWall && !isGrounded && moveInput.magnitude > 0.1f && runPressed)
         {
             if (!isWallRunning)
             {
@@ -178,7 +178,7 @@ public class PlayerMovement : MonoBehaviour
         }
 
         // --- JUMPING ---
-        if (Input.GetButtonDown("Jump"))
+        if (jumpPressed)
         {
             if (isGrounded || isWallRunning || isOnCeiling)
             {
@@ -199,6 +199,7 @@ public class PlayerMovement : MonoBehaviour
                 rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
                 jumpCount++; // Second jump used
             }
+            jumpPressed = false;
         }
 
         // --- STORE PREVIOUS STATES ---
@@ -253,4 +254,12 @@ public class PlayerMovement : MonoBehaviour
             Gizmos.DrawSphere(hit.point, sphereRadius);
         }
     }
+
+    // --- ANDROID BUTTONS ---
+    public SimpleJoystick joystick; // Assign in Inspector
+    public bool jumpPressed = false;
+    public bool runPressed = false;
+    public void OnJumpButton() { jumpPressed = true; }
+    public void OnRunButtonDown() { runPressed = true; }
+    public void OnRunButtonUp() { runPressed = false; }
 }

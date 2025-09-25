@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 565787c60c8cf9b46a70949c1f2e1a66
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204464
+  packageName: Simple Mobile UI Inputs
+  packageVersion: 1.1
+  assetPath: Assets/Simple Mobile UI Inputs/Simple Character Controller/CharacterControllerSystem/CameraMovement.cs
+  uploadId: 459444

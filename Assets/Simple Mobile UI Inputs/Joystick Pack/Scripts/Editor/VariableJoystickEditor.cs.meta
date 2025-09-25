@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 58b5a2db95af76c4c9d4116a09ec3697
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204464
+  packageName: Simple Mobile UI Inputs
+  packageVersion: 1.1
+  assetPath: Assets/Simple Mobile UI Inputs/Joystick Pack/Scripts/Editor/VariableJoystickEditor.cs
+  uploadId: 459444

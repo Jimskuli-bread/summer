@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c49e8382baef8a74ca21cc0acf888fba
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204464
+  packageName: Simple Mobile UI Inputs
+  packageVersion: 1.1
+  assetPath: Assets/Simple Mobile UI Inputs/Simple Character Controller/Materials/PlayerMaterial.mat
+  uploadId: 459444
