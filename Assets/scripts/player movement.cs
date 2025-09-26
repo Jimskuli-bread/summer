@@ -257,9 +257,35 @@ public class PlayerMovement : MonoBehaviour
 
     // --- ANDROID BUTTONS ---
     public SimpleJoystick joystick; // Assign in Inspector
+    public UnityEngine.UI.Button jumpButton; // Assign in Inspector
+    public UnityEngine.UI.Button grappleButton; // Assign in Inspector
     public bool jumpPressed = false;
     public bool runPressed = false;
+
+    void Awake()
+    {
+        // Require explicit assignment of buttons
+        if (jumpButton != null)
+            jumpButton.onClick.AddListener(OnJumpButton);
+        if (grappleButton != null)
+            grappleButton.onClick.AddListener(OnGrappleButton);
+    }
+
     public void OnJumpButton() { jumpPressed = true; }
     public void OnRunButtonDown() { runPressed = true; }
     public void OnRunButtonUp() { runPressed = false; }
+    public void OnGrappleButton() { TryGrapple(); }
+
+    // Example grapple logic (customize as needed)
+    private void TryGrapple()
+    {
+        // Implement grapple/wallrun activation here
+        // For example, start wallrun if touching wall
+        if (isTouchingWall && !isGrounded)
+        {
+            isWallRunning = true;
+            wallRunTimer = wallRunDuration;
+            jumpCount = 0;
+        }
+    }
 }
