@@ -15,6 +15,10 @@ public class GrapplingHook : MonoBehaviour
     private SpringJoint joint;
     private Vector3 grapplePoint;
 
+    // Allow mobile/joystick/camera UI to trigger grapple
+    [HideInInspector]
+    public bool mobileGrappleRequest = false;
+
     void Start()
     {
         rb = GetComponent<Rigidbody>();
@@ -31,8 +35,11 @@ public class GrapplingHook : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(grappleKey))
+        // Accept both mouse/keyboard and mobile/joystick/camera UI triggers
+        bool grapplePressed = Input.GetKeyDown(grappleKey) || mobileGrappleRequest;
+        if (grapplePressed)
         {
+            mobileGrappleRequest = false;
             if (joint == null)
             {
                 Ray ray = cam.ScreenPointToRay(new Vector3(Screen.width / 2, Screen.height / 2));
@@ -98,6 +105,12 @@ public class GrapplingHook : MonoBehaviour
             Vector3 swingDir = (camRight * horizontal + camForward * vertical).normalized;
             rb.AddForce(swingDir * 30f, ForceMode.Acceleration);
         }
+    }
+
+    // Call this from UI button, joystick, or other scripts to trigger grapple
+    public void RequestGrapple()
+    {
+        mobileGrappleRequest = true;
     }
 
     void ReleaseGrapple()

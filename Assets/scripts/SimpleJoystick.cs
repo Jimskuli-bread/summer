@@ -11,25 +11,31 @@ public class SimpleJoystick : MonoBehaviour, IDragHandler, IPointerUpHandler, IP
 
     private Vector2 input = Vector2.zero;
 
+    // Static flag to indicate if any joystick is being touched
+    public static bool IsJoystickActive = false;
+
     public void OnDrag(PointerEventData eventData)
     {
-        Vector2 pos;
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(background, eventData.position, eventData.pressEventCamera, out pos);
-        pos = pos / background.sizeDelta * 2f;
-        input = Vector2.ClampMagnitude(pos, 1f);
-        handle.anchoredPosition = input * (background.sizeDelta.x / 2f) * handleRange;
-        Direction = (input.magnitude > deadZone) ? input : Vector2.zero;
+    IsJoystickActive = true;
+    Vector2 pos;
+    RectTransformUtility.ScreenPointToLocalPointInRectangle(background, eventData.position, eventData.pressEventCamera, out pos);
+    pos = pos / background.sizeDelta * 2f;
+    input = Vector2.ClampMagnitude(pos, 1f);
+    handle.anchoredPosition = input * (background.sizeDelta.x / 2f) * handleRange;
+    Direction = (input.magnitude > deadZone) ? input : Vector2.zero;
     }
 
     public void OnPointerDown(PointerEventData eventData)
     {
-        OnDrag(eventData);
+    IsJoystickActive = true;
+    OnDrag(eventData);
     }
 
     public void OnPointerUp(PointerEventData eventData)
     {
-        input = Vector2.zero;
-        handle.anchoredPosition = Vector2.zero;
-        Direction = Vector2.zero;
+    input = Vector2.zero;
+    handle.anchoredPosition = Vector2.zero;
+    Direction = Vector2.zero;
+    IsJoystickActive = false;
     }
 }

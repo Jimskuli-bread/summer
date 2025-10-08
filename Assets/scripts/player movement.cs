@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 [RequireComponent(typeof(Rigidbody))]
 public class PlayerMovement : MonoBehaviour
@@ -9,6 +10,13 @@ public class PlayerMovement : MonoBehaviour
     public float jumpForce = 8f;
     public float airControl = 0.7f;
     public int maxJumps = 2;
+
+    [Header("Mobile Smoothing")]
+    public float joystickDeadzone = 0.12f;
+    public float acceleration = 12f;
+    public float deceleration = 16f;
+    public float coyoteTime = 0.15f; // Time after leaving ground to still allow jump
+    public float jumpBufferTime = 0.15f; // Time to buffer jump input before landing
 
     [Header("Parkour Settings")]
     public float wallJumpForce = 14f;
@@ -21,8 +29,11 @@ public class PlayerMovement : MonoBehaviour
 
     [Header("References")]
     public Transform cameraTransform;
+    public SimpleJoystick joystick; // Assign in Inspector
+    public Button jumpButton; // Assign in Inspector
+    public Button grappleButton; // Assign in Inspector
 
-    // Add at the top for sphere settings
+    [Header("Ground Check")]
     public float jumpResetSphereRadius = 0.3f;
 
     private Rigidbody rb;
@@ -36,40 +47,46 @@ public class PlayerMovement : MonoBehaviour
     private Vector3 vaultStart;
     private Vector3 vaultEnd;
     private float vaultTimer;
+    // Smoothing and jump helpers
+    private float coyoteTimer = 0f;
+    private float jumpBufferTimer = 0f;
+    private Vector3 currentVelocity = Vector3.zero;
 
-    // Track previous states for proper jump reset
+    // State tracking
     private bool wasGrounded = false;
     private bool wasOnCeiling = false;
     private bool wasWallRunning = false;
 
-    void Start()
+    public bool jumpPressed = false;
+
+    void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        // In the Rigidbody component (Inspector), freeze rotation X and Z (but NOT Y) for a capsule!
-        // Cursor.lockState = CursorLockMode.Locked; // Removed for mobile
-        // Cursor.visible = true; // Ensure cursor is visible
+        if (jumpButton != null)
+            jumpButton.onClick.AddListener(OnJumpButton);
+        if (grappleButton != null)
+            grappleButton.onClick.AddListener(OnGrappleButton);
     }
 
     void Update()
     {
-        // --- GROUND & ROOF CHECKS USING GIZMO SPHERE ---
+        // --- GROUND CHECK ---
         Vector3 sphereOrigin = transform.position + Vector3.down * 0.5f;
         float sphereRadius = jumpResetSphereRadius;
-
         RaycastHit hit;
+        isGrounded = false;
         if (Physics.Raycast(sphereOrigin, Vector3.down, out hit, 20f))
         {
-            Vector3 gizmoPos = hit.point;
             Collider playerCollider = GetComponent<Collider>();
             if (playerCollider != null)
             {
-                Collider[] overlaps = Physics.OverlapSphere(gizmoPos, sphereRadius);
+                Collider[] overlaps = Physics.OverlapSphere(hit.point, sphereRadius);
                 foreach (var col in overlaps)
                 {
                     if (col == playerCollider)
                     {
-                        // Reset jumps only while the player is touching the gizmo sphere
                         jumpCount = 0;
+                        isGrounded = true;
                         break;
                     }
                 }
@@ -80,25 +97,26 @@ public class PlayerMovement : MonoBehaviour
         float ceilingCheckDistance = 1.5f;
         bool isOnCeiling = Physics.Raycast(transform.position, Vector3.up, ceilingCheckDistance);
 
-        // --- ANDROID INPUT ---
-        // Replace keyboard/mouse with joystick and button flags
-        Vector2 joyInput = joystick != null ? joystick.Direction : Vector2.zero;
-        float horizontal = joyInput.x;
-        float vertical = joyInput.y;
-        Vector3 camForward = cameraTransform.forward;
-        camForward.y = 0f;
-        camForward.Normalize();
-        Vector3 camRight = cameraTransform.right;
-        camRight.y = 0f;
-        camRight.Normalize();
-        Vector3 moveInput = (camForward * vertical + camRight * horizontal).normalized;
-
-        // --- MOVEMENT ---
-        float speed = runPressed ? runSpeed : walkSpeed;
+        // --- JOYSTICK INPUT ---
+        Vector3 moveInput = Vector3.zero;
+        if (joystick != null && joystick.Direction.magnitude > joystickDeadzone)
+        {
+            Vector2 joyInput = joystick.Direction;
+            Vector3 camForward = cameraTransform != null ? cameraTransform.forward : Vector3.forward;
+            camForward.y = 0f;
+            camForward.Normalize();
+            Vector3 camRight = cameraTransform != null ? cameraTransform.right : Vector3.right;
+            camRight.y = 0f;
+            camRight.Normalize();
+            moveInput = (camForward * joyInput.y + camRight * joyInput.x).normalized;
+        }
+        // --- SMOOTH ACCELERATION ---
+        float speed = runSpeed;
         Vector3 targetVel = moveInput * speed;
-        Vector3 velocityChange = targetVel - new Vector3(rb.velocity.x, 0, rb.velocity.z);
-        velocityChange = Vector3.ClampMagnitude(velocityChange, isGrounded ? 20f : 10f);
-        rb.AddForce(velocityChange * (isGrounded ? 1f : airControl), ForceMode.Acceleration);
+        Vector3 flatVel = new Vector3(rb.velocity.x, 0, rb.velocity.z);
+        float accel = (moveInput.magnitude > 0.01f) ? acceleration : deceleration;
+        currentVelocity = Vector3.MoveTowards(flatVel, targetVel, accel * Time.deltaTime);
+        rb.velocity = new Vector3(currentVelocity.x, rb.velocity.y, currentVelocity.z);
 
         // --- VAULTING ---
         if (isVaulting)
@@ -126,13 +144,13 @@ public class PlayerMovement : MonoBehaviour
         }
 
         // --- WALLRUN START/STOP ---
-        if (isTouchingWall && !isGrounded && moveInput.magnitude > 0.1f && runPressed)
+        if (isTouchingWall && !isGrounded && moveInput.magnitude > 0.1f)
         {
             if (!isWallRunning)
             {
                 isWallRunning = true;
                 wallRunTimer = wallRunDuration;
-                jumpCount = 0; // Reset jumps on wallrun start
+                jumpCount = 0;
             }
         }
         else
@@ -157,7 +175,7 @@ public class PlayerMovement : MonoBehaviour
                 Vector3 desiredVelocity = wallRunDir + Vector3.up * wallRunUpwardSpeed;
                 rb.velocity = Vector3.Lerp(rb.velocity, desiredVelocity, Time.deltaTime * 8f);
                 rb.velocity += Vector3.down * wallRunGravity * Time.deltaTime;
-                jumpCount = 0; // Reset jumps while wallrunning
+                jumpCount = 0;
                 wasWallRunning = true;
                 return;
             }
@@ -166,41 +184,52 @@ public class PlayerMovement : MonoBehaviour
         // --- VAULTING DETECTION ---
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded && !isVaulting)
         {
-            if (Physics.Raycast(transform.position + Vector3.up * 0.5f, camForward, out hit, vaultDistance))
+            if (Physics.Raycast(transform.position + Vector3.up * 0.5f, moveInput, out hit, vaultDistance))
             {
                 if (hit.collider.CompareTag("Building") && hit.point.y - transform.position.y < vaultHeight)
                 {
-                    StartCoroutine(VaultRoutine(hit.point + Vector3.up * 1.3f + camForward * 1.1f));
+                    StartCoroutine(VaultRoutine(hit.point + Vector3.up * 1.3f + moveInput * 1.1f));
                     rb.velocity = Vector3.zero;
                     return;
                 }
             }
         }
 
-        // --- JUMPING ---
+        // --- COYOTE TIME & JUMP BUFFER ---
+        if (isGrounded)
+            coyoteTimer = coyoteTime;
+        else
+            coyoteTimer -= Time.deltaTime;
+
         if (jumpPressed)
+            jumpBufferTimer = jumpBufferTime;
+        else
+            jumpBufferTimer -= Time.deltaTime;
+
+        // --- JUMPING ---
+        if (jumpBufferTimer > 0f && (coyoteTimer > 0f || isWallRunning || isOnCeiling))
         {
-            if (isGrounded || isWallRunning || isOnCeiling)
-            {
-                Vector3 v = rb.velocity;
-                v.y = 0;
-                rb.velocity = v;
-                if (isWallRunning)
-                    rb.velocity = wallNormal * wallJumpForce + Vector3.up * jumpForce;
-                else
-                    rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-                jumpCount = 1; // First jump used
-            }
-            else if (jumpCount < maxJumps)
-            {
-                Vector3 v = rb.velocity;
-                v.y = 0;
-                rb.velocity = v;
+            Vector3 v = rb.velocity;
+            v.y = 0;
+            rb.velocity = v;
+            if (isWallRunning)
+                rb.velocity = wallNormal * wallJumpForce + Vector3.up * jumpForce;
+            else
                 rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-                jumpCount++; // Second jump used
-            }
-            jumpPressed = false;
+            jumpCount = 1;
+            jumpBufferTimer = 0f;
+            coyoteTimer = 0f;
         }
+        else if (jumpBufferTimer > 0f && jumpCount < maxJumps)
+        {
+            Vector3 v = rb.velocity;
+            v.y = 0;
+            rb.velocity = v;
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            jumpCount++;
+            jumpBufferTimer = 0f;
+        }
+        jumpPressed = false;
 
         // --- STORE PREVIOUS STATES ---
         wasGrounded = isGrounded;
@@ -209,7 +238,7 @@ public class PlayerMovement : MonoBehaviour
     }
 
     // --- VAULTING COROUTINE ---
-    System.Collections.IEnumerator VaultRoutine(Vector3 end)
+    private System.Collections.IEnumerator VaultRoutine(Vector3 end)
     {
         isVaulting = true;
         vaultStart = transform.position;
@@ -224,6 +253,23 @@ public class PlayerMovement : MonoBehaviour
             yield return null;
         }
         isVaulting = false;
+    }
+
+    // --- GRAPPLE BUTTON ---
+    public void OnGrappleButton() { TryGrapple(); }
+
+    // --- JUMP BUTTON ---
+    public void OnJumpButton() { jumpPressed = true; }
+
+    // --- GRAPPLE LOGIC ---
+    private void TryGrapple()
+    {
+        if (isTouchingWall && !isGrounded)
+        {
+            isWallRunning = true;
+            wallRunTimer = wallRunDuration;
+            jumpCount = 0;
+        }
     }
 
     void OnDrawGizmos()
@@ -252,40 +298,6 @@ public class PlayerMovement : MonoBehaviour
             }
 
             Gizmos.DrawSphere(hit.point, sphereRadius);
-        }
-    }
-
-    // --- ANDROID BUTTONS ---
-    public SimpleJoystick joystick; // Assign in Inspector
-    public UnityEngine.UI.Button jumpButton; // Assign in Inspector
-    public UnityEngine.UI.Button grappleButton; // Assign in Inspector
-    public bool jumpPressed = false;
-    public bool runPressed = false;
-
-    void Awake()
-    {
-        // Require explicit assignment of buttons
-        if (jumpButton != null)
-            jumpButton.onClick.AddListener(OnJumpButton);
-        if (grappleButton != null)
-            grappleButton.onClick.AddListener(OnGrappleButton);
-    }
-
-    public void OnJumpButton() { jumpPressed = true; }
-    public void OnRunButtonDown() { runPressed = true; }
-    public void OnRunButtonUp() { runPressed = false; }
-    public void OnGrappleButton() { TryGrapple(); }
-
-    // Example grapple logic (customize as needed)
-    private void TryGrapple()
-    {
-        // Implement grapple/wallrun activation here
-        // For example, start wallrun if touching wall
-        if (isTouchingWall && !isGrounded)
-        {
-            isWallRunning = true;
-            wallRunTimer = wallRunDuration;
-            jumpCount = 0;
         }
     }
 }
